@@ -74,6 +74,7 @@ with open("stream_data/stream.json", "a") as f:
         event = next(gen)
         f.write(json.dumps(event) + "\n")
         f.flush()
+        print(event)
         time.sleep(1)
 
 
