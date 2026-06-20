@@ -1,111 +1,63 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jun 11 06:34:21 2026
-
-@author: cytech
-"""
+"""Générateur de flux infini d'événements LeBonCoin-style."""
 
 import json
 import random
 import time
 from datetime import datetime, timezone
-
-cities = ["Paris", "Lyon", "Marseille"]
-categories = ["Vehicules", "Electronique", "Mobilier"]
-
-actions = ["AIME", "VOUT", "ACHAT"]
+from pathlib import Path
+import uuid
 
 
 
 
-users = {f"user_{i}" : random.choice(cities)
-         for i in range(1,101)
-         }
+cities      = ["Paris", "Lyon", "Marseille", "Bordeaux", "Toulouse"]
+categories  = ["Vehicules", "Electronique", "Mobilier", "Vetements", "Loisirs"]
+actions     = ["AIME", "VOUT", "ACHAT"]
 
 
 
-products = { f"product_{i}" :
-           {
-           "category" : random.choice(categories),
-           "seller" : f"sel_{random.randint(1,100)}",
-           "price" : round(random.uniform(50, 5000), 2)
-           }
-           for i in range(1,501)
-    }
+users    = {f"user_{i}":    random.choice(cities) for i in range(1, 101)}
+products = {f"product_{i}": 
+            {
+                "category": random.choice(categories),
+                "seller":   f"sel_{random.randint(1, 20)}",
+                "price":    round(random.uniform(10, 5000), 2)
+                }
+            for i in range(1, 501)}
 
-def now():
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 
 def stream():
     while True:
-
-        user_id = random.choice(list(users.keys()))
-        product_id = random.choice(list(products.keys()))
-
-        user_city = users[user_id]
-        product = products[product_id]
-
+        uid  = random.choice(list(users))
+        pid  = random.choice(list(products))
+        prod = products[pid]
         event = {
-            "timestamp": now(),
-
-            "user_id": user_id,
-            "user_city": user_city,
-
-            "product_id": product_id,
-            "product_cat": product["category"],
-
-            "seller_id": product["seller"],
-            "action_type": random.choice(actions),
-
-            "price": product["price"]
+            "timestamp":   datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "user_id":     uid,
+            "user_city":   users[uid],
+            "product_id":  pid,
+            "product_cat": prod["category"],
+            "seller_id":   prod["seller"],
+            "action_type": random.choices(actions, weights=[6, 3, 1], k=1)[0],
+            "price":       prod["price"],
         }
-
+        
         yield event
-  
-   
+
+
 
 gen = stream()
 
-with open("stream_data/stream.json", "a") as f:
-    while True:
-        event = next(gen)
+Path("stream_data").mkdir(exist_ok=True)
+while True:
+    event = next(gen)
+    # Création d'un nom de fichier unique pour chaque événement
+    filename = f"stream_data/event_{uuid.uuid4()}.json"
+    with open(filename, "w") as f:
         f.write(json.dumps(event) + "\n")
-        f.flush()
-        print(event)
-        time.sleep(1)
-
-
-
-     
-
-        
-
-
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+    print(f"Événement écrit : {filename}")
+    time.sleep(1)
         
