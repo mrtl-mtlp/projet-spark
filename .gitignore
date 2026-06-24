@@ -427,3 +427,10 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Snapshots du graphe générés à l'exécution (lus par visualisation.py)
+graph_snapshot/
+
+# Sorties d'exécution du générateur (le seed stream.json reste suivi)
+stream_data/event_*.json
+.DS_Store
