@@ -10,19 +10,26 @@
 #          ./run.sh 2         # rafraîchit toutes les 2 s
 #
 # Ctrl+C arrête proprement les trois processus.
-
+ 
 cd "$(dirname "$0")" || exit 1
-
+ 
 # Interpréteur Python qui contient pyspark 3.5 (un script non-interactif ne voit
 # pas l'alias `python3` du shell : on choisit explicitement le bon binaire).
+# On regarde d'abord si un environnement virtuel local existe (./venv ou ./.venv).
 PY=""
-for cand in /opt/homebrew/opt/python@3.11/bin/python3.11 python3.11 python3; do
+for cand in ./venv/bin/python3 ./.venv/bin/python3 /opt/homebrew/opt/python@3.11/bin/python3.11 python3.11 python3; do
     if command -v "$cand" >/dev/null 2>&1 && "$cand" -c "import pyspark" >/dev/null 2>&1; then
         PY="$cand"; break
     fi
 done
 if [ -z "$PY" ]; then
     echo "Erreur : aucun Python avec pyspark trouvé." >&2
+    echo "→ Crée un environnement virtuel et installe les dépendances :" >&2
+    echo "    python3 -m venv venv" >&2
+    echo "    source venv/bin/activate" >&2
+    echo "    pip install "pyspark==3.5.*"" >&2
+    echo "    pip install flask" >&2
+    echo "    pip install graphframes-py" >&2
     exit 1
 fi
 echo "Interpréteur : $PY"
