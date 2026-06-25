@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Graphe LeBonCoin</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #111; color: #e0ddd4; }
+#app { max-width: 1100px; margin: 0 auto; padding: 1.2rem; display: flex; flex-direction: column; gap: 12px; }
+
+header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+h1 { font-size: 15px; font-weight: 500; }
+#dot { width: 8px; height: 8px; border-radius: 50%; background: #444; display: inline-block; margin-right: 5px; transition: background .4s; }
+#dot.on { background: #1D9E75; }
+#stxt { font-size: 12px; color: #666; }
+
+/* Onglets */
+#tabs { display: flex; gap: 4px; }
+.tab { font-size: 12px; cursor: pointer; background: transparent; border: 0.5px solid #333; border-radius: 7px; padding: 5px 14px; color: #666; }
+.tab:hover { background: #1c1c1a; color: #ccc; }
+.tab.active { background: #1c1c1a; color: #e0ddd4; border-color: #555; }
+
+#stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+.card { background: #1c1c1a; border: 0.5px solid #333; border-radius: 8px; padding: 10px 14px; }
+.card-label { font-size: 11px; color: #666; margin-bottom: 2px; }
+.card-val { font-size: 22px; font-weight: 500; }
+
+/* Vue graphe */
+#view-graph { display: flex; flex-direction: column; gap: 12px; }
+#canvas { background: #000; border: 0.5px solid #2a2a2a; border-radius: 10px; height: 500px; }
+svg { width: 100%; height: 100%; }
+#bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.panel { background: #1c1c1a; border: 0.5px solid #333; border-radius: 8px; padding: 12px 16px; font-size: 13px; }
+.panel-title { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+#info { color: #777; line-height: 1.7; }
+#info b { color: #e0ddd4; font-weight: 500; }
+#top-list { list-style: none; }
+#top-list li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 0.5px solid #222; font-size: 12px; color: #aaa; }
+#top-list li:last-child { border: none; }
+
+/* Vue stats */
+#view-stats { display: none; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat-block { background: #1c1c1a; border: 0.5px solid #333; border-radius: 8px; padding: 14px 16px; }
+.stat-block h2 { font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; font-weight: 400; }
+.rank-list { list-style: none; }
+.rank-list li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 0.5px solid #1e1e1c; font-size: 12px; }
+.rank-list li:last-child { border: none; }
+.rank-num { font-size: 10px; color: #444; width: 14px; text-align: right; flex-shrink: 0; }
+.rank-id { color: #aaa; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-bar-wrap { width: 80px; height: 6px; background: #222; border-radius: 3px; flex-shrink: 0; }
+.rank-bar { height: 6px; border-radius: 3px; }
+.rank-val { font-size: 11px; color: #666; width: 28px; text-align: right; flex-shrink: 0; }
+
+.badge { background: #252522; color: #888; font-size: 11px; padding: 1px 8px; border-radius: 99px; }
+#controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+button { font-size: 12px; cursor: pointer; background: #1c1c1a; border: 0.5px solid #333; border-radius: 7px; padding: 5px 14px; color: #ccc; }
+button:hover { background: #252522; }
+#legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: #666; align-items: center; }
+.lk { display: flex; align-items: center; gap: 5px; }
+.lk-dot { width: 9px; height: 9px; border-radius: 50%; }
+.lk-line { width: 18px; height: 2px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <h1>Graphe de connexions — LeBonCoin streaming</h1>
+    <div><span id="dot"></span><span id="stxt">Connexion…</span></div>
+  </header>
+
+  <div id="tabs">
+    <button class="tab active" onclick="showTab('graph')">Graphe</button>
+    <button class="tab" onclick="showTab('stats')">Statistiques</button>
+  </div>
+
+  <div id="stats">
+    <div class="card"><div class="card-label">Sommets</div><div class="card-val" id="sv">0</div></div>
+    <div class="card"><div class="card-label">Arêtes</div><div class="card-val" id="se">0</div></div>
+    <div class="card"><div class="card-label">Événements</div><div class="card-val" id="sev">0</div></div>
+    <div class="card"><div class="card-label">Ev./min</div><div class="card-val" id="sr">0</div></div>
+  </div>
+
+  <!-- Vue graphe -->
+  <div id="view-graph">
+    <div id="legend">
+      <span class="lk"><span class="lk-dot" style="background:#3B8BD4"></span>Utilisateur</span>
+      <span class="lk"><span class="lk-dot" style="background:#E24B4A"></span>Vendeur</span>
+      <span class="lk"><span class="lk-dot" style="background:#1D9E75"></span>Produit</span>
+      <span style="border-left:1px solid #333;padding-left:12px;margin-left:4px" class="lk"><span class="lk-line" style="background:#1D9E75"></span>AIME</span>
+      <span class="lk"><span class="lk-line" style="background:#BA7517"></span>VOUT</span>
+      <span class="lk"><span class="lk-line" style="background:#E24B4A"></span>ACHAT</span>
+      <span class="lk"><span class="lk-line" style="background:#8A6FD6"></span>PROPOSE</span>
+    </div>
+    <div id="controls">
+      <button id="btn-pause">⏸ Pause</button>
+      <button id="btn-reset">↺ Reset</button>
+      <button id="btn-zoom-reset">⊙ Recentrer</button>
+      <span style="font-size:11px;color:#555">Molette pour zoomer · Clic-glisser pour naviguer</span>
+    </div>
+    <div id="canvas"><svg id="svg"></svg></div>
+    <div id="bottom">
+      <div class="panel">
+        <div class="panel-title">Sommet sélectionné</div>
+        <div id="info">Cliquez sur un nœud…</div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Top 5 produits (in-degree)</div>
+        <ul id="top-list"><li style="color:#444;font-size:12px">En attente…</li></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vue statistiques -->
+  <div id="view-stats">
+
+    <div class="stat-block">
+      <h2>Acheteurs les plus actifs</h2>
+      <ul class="rank-list" id="rank-users"></ul>
+    </div>
+
+    <div class="stat-block">
+      <h2>Vendeurs — articles proposés</h2>
+      <ul class="rank-list" id="rank-sellers"></ul>
+    </div>
+
+    <div class="stat-block">
+      <h2>Produits les plus aimés</h2>
+      <ul class="rank-list" id="rank-aime"></ul>
+    </div>
+
+    <div class="stat-block">
+      <h2>Produits les plus voulus</h2>
+      <ul class="rank-list" id="rank-vout"></ul>
+    </div>
+
+    <div class="stat-block" style="grid-column:span 2">
+      <h2>Produits les plus achetés</h2>
+      <ul class="rank-list" id="rank-achat"></ul>
+    </div>
+
+  </div>
+
+</div>
+<script>
+const COL  = { U:"#3B8BD4", S:"#E24B4A", P:"#1D9E75" };
+const ECOL = { AIME:"#1D9E75", VOUT:"#BA7517", ACHAT:"#E24B4A", PROPOSE:"#8A6FD6" };
+const TLAB = { U:"Utilisateur", S:"Vendeur", P:"Produit" };
+const MAX  = 80;
+
+// Compteurs globaux (jamais remis à zéro par le prune)
+let gUserActs = {}, gSellerProds = {}, gProdAime = {}, gProdVout = {}, gProdAchat = {};
+
+let nodes, links, nm, deg, total, rec, paused;
+function init(){
+  nodes=[]; links=[]; nm={}; deg={}; total=0; rec=[]; paused=false;
+}
+init();
+
+const wrap = document.getElementById("canvas");
+let W = wrap.clientWidth, H = wrap.clientHeight;
+
+let svg, ge, gn, zoomBehavior;
+function initSVG(){
+  d3.select("#svg").selectAll("*").remove();
+  svg = d3.select("#svg");
+  const container = svg.append("g");
+  ge = container.append("g");
+  gn = container.append("g");
+  zoomBehavior = d3.zoom().scaleExtent([0.2, 5])
+    .on("zoom", e => container.attr("transform", e.transform));
+  svg.call(zoomBehavior).on("dblclick.zoom", null);
+}
+initSVG();
+
+let sim;
+function initSim(){
+  if(sim) sim.stop();
+  sim = d3.forceSimulation()
+    .force("link",    d3.forceLink().id(d=>d.id).distance(80).strength(0.5))
+    .force("charge",  d3.forceManyBody().strength(-200))
+    .force("x", d3.forceX(W/2).strength(0.04))
+    .force("y", d3.forceY(H/2).strength(0.04))
+    .force("collide", d3.forceCollide(22))
+    .alphaDecay(0.015)
+    .on("tick", tick);
+}
+initSim();
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+function getNode(id, type){
+  if(!nm[id]){
+    nm[id] = { id, type, x:W/2+(Math.random()-.5)*100, y:H/2+(Math.random()-.5)*100 };
+    nodes.push(nm[id]); deg[id]=0;
+  }
+  return nm[id];
+}
+
+// --- Traitement des événements (rapide, sans rendu direct) ---
+// Le rendu (DOM/D3/simulation) est coûteux : on ne le fait plus à chaque
+// événement mais via une boucle planifiée (voir plus bas), ce qui permet
+// d'absorber des milliers d'événements/seconde sans bloquer l'UI.
+let dirty = false;
+
+function addEvent(ev){
+  if(paused) return;
+  total++; rec.push(Date.now());
+
+  getNode(ev.user_id,   "U");
+  getNode(ev.product_id,"P");
+  getNode(ev.seller_id, "S");
+
+  const rel = ev.action_type;
+  deg[ev.product_id] = (deg[ev.product_id]||0) + 2;
+  if(links.length < 600){
+    links.push({ source:ev.user_id,   target:ev.product_id, rel });
+    links.push({ source:ev.seller_id, target:ev.product_id, rel:"PROPOSE" });
+  }
+
+  // Compteurs globaux
+  gUserActs[ev.user_id]      = (gUserActs[ev.user_id]||0) + 1;
+  gSellerProds[ev.seller_id] = (gSellerProds[ev.seller_id]||0) + 1;
+  if(rel==="AIME")  gProdAime[ev.product_id]  = (gProdAime[ev.product_id]||0) + 1;
+  if(rel==="VOUT")  gProdVout[ev.product_id]  = (gProdVout[ev.product_id]||0) + 1;
+  if(rel==="ACHAT") gProdAchat[ev.product_id] = (gProdAchat[ev.product_id]||0) + 1;
+
+  if(nodes.length > MAX) prune();
+  dirty = true;
+}
+
+// Boucle de rendu throttlée : applique au plus une fois toutes les 100ms
+// l'ensemble des événements accumulés depuis le dernier passage.
+setInterval(()=>{
+  rec = rec.filter(t=>Date.now()-t<60000);
+  if(!dirty) return;
+  dirty = false;
+  render();
+  updateStats();
+  if(document.getElementById("view-stats").style.display !== "none") updateRankings();
+}, 100);
+
+function prune(){
+  const keep = new Set(nodes.slice(-MAX).map(n=>n.id));
+  nodes = nodes.filter(n=>keep.has(n.id));
+  nm={}; nodes.forEach(n=>nm[n.id]=n);
+  links = links.filter(l=>{
+    const s=l.source?.id||l.source, t=l.target?.id||l.target;
+    return keep.has(s)&&keep.has(t);
+  }).slice(-500);
+  deg={}; nodes.forEach(n=>deg[n.id]=0);
+  links.forEach(l=>{ const t=l.target?.id||l.target; deg[t]=(deg[t]||0)+1; });
+}
+
+function render(){
+  ge.selectAll("line").data(links, (_,i)=>i).join(
+    en => en.append("line")
+      .attr("stroke", d=>ECOL[d.rel]||"#666")
+      .attr("stroke-width", d=>d.rel==="ACHAT"?2:1)
+      .attr("stroke-opacity", 0.5)
+  );
+  gn.selectAll("g.ng").data(nodes, d=>d.id).join(
+    en => {
+      const g = en.append("g").attr("class","ng").style("cursor","pointer")
+        .call(d3.drag().on("start",ds).on("drag",dd).on("end",de))
+        .on("click", onCl);
+      g.append("circle")
+        .attr("r", d=>d.type==="P"?7:10)
+        .attr("fill", d=>COL[d.type])
+        .attr("stroke","#111").attr("stroke-width",1.5);
+      g.append("text")
+        .text(d=>d.id.replace(/^\w+_/,""))
+        .attr("y",-14).attr("text-anchor","middle")
+        .attr("font-size","9").attr("fill","#666")
+        .attr("pointer-events","none");
+      return g;
+    }
+  );
+  sim.nodes(nodes); sim.force("link").links(links); sim.alpha(0.2).restart();
+}
+
+function tick(){
+  ge.selectAll("line")
+    .attr("x1",d=>d.source.x).attr("y1",d=>d.source.y)
+    .attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+  gn.selectAll("g.ng")
+    .attr("transform",d=>`translate(${d.x},${d.y})`);
+}
+
+function ds(e,d){ if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; }
+function dd(e,d){ d.fx=e.x; d.fy=e.y; }
+function de(e,d){ if(!e.active) sim.alphaTarget(0); d.fx=d.fy=null; }
+
+function onCl(event,d){
+  gn.selectAll("circle").attr("stroke","#111").attr("stroke-width",1.5);
+  d3.select(this).select("circle").attr("stroke","#fff").attr("stroke-width",2.5);
+  const out=links.filter(l=>(l.source?.id||l.source)===d.id);
+  const inc=links.filter(l=>(l.target?.id||l.target)===d.id);
+  document.getElementById("info").innerHTML=
+    `<b>${d.id}</b> · ${TLAB[d.type]||d.type}<br>
+     In-degree : <b>${deg[d.id]||0}</b> · Sortants : <b>${out.length}</b> · Entrants : <b>${inc.length}</b>
+     <div style="margin-top:5px;font-size:11px;color:#555">
+       ${out.slice(0,5).map(l=>`→ ${(l.target?.id||l.target).replace(/^\w+_/,"")} [${l.rel}]`).join("  ")}
+     </div>`;
+}
+
+function updateStats(){
+  document.getElementById("sv").textContent  = nodes.length;
+  document.getElementById("se").textContent  = links.length;
+  document.getElementById("sev").textContent = total;
+  document.getElementById("sr").textContent  = rec.length;
+  const top = Object.entries(deg).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  document.getElementById("top-list").innerHTML = top.map(([id,d])=>
+    `<li><span>${id}</span><span class="badge">${d}</span></li>`).join("") || "<li style='color:#444'>—</li>";
+}
+
+function rankList(data, elId, color){
+  const sorted = Object.entries(data).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const max = sorted[0]?.[1] || 1;
+  document.getElementById(elId).innerHTML = sorted.map(([id,v],i)=>
+    `<li>
+      <span class="rank-num">${i+1}</span>
+      <span class="rank-id">${id}</span>
+      <span class="rank-bar-wrap"><span class="rank-bar" style="width:${Math.round(v/max*100)}%;background:${color}"></span></span>
+      <span class="rank-val">${v}</span>
+    </li>`
+  ).join("") || `<li style="color:#444;font-size:12px">En attente…</li>`;
+}
+
+function updateRankings(){
+  rankList(gUserActs,    "rank-users",   "#3B8BD4");
+  rankList(gSellerProds, "rank-sellers", "#E24B4A");
+  rankList(gProdAime,    "rank-aime",    "#1D9E75");
+  rankList(gProdVout,    "rank-vout",    "#BA7517");
+  rankList(gProdAchat,   "rank-achat",   "#E24B4A");
+}
+
+// Onglets
+function showTab(t){
+  document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
+  event.target.classList.add("active");
+  document.getElementById("view-graph").style.display  = t==="graph"  ? "flex" : "none";
+  document.getElementById("view-stats").style.display  = t==="stats"  ? "grid" : "none";
+  if(t==="stats") updateRankings();
+}
+
+// Contrôles
+document.getElementById("btn-pause").onclick = function(){
+  paused=!paused; this.textContent=paused?"▶ Reprendre":"⏸ Pause";
+};
+document.getElementById("btn-reset").onclick = () => {
+  init(); initSVG(); initSim(); updateStats();
+  document.getElementById("info").textContent="Cliquez sur un nœud…";
+};
+document.getElementById("btn-zoom-reset").onclick = () => {
+  svg.transition().duration(400).call(zoomBehavior.transform, d3.zoomIdentity);
+};
+
+new ResizeObserver(()=>{
+  W=wrap.clientWidth; H=wrap.clientHeight;
+  sim.force("x", d3.forceX(W/2).strength(0.04));
+  sim.force("y", d3.forceY(H/2).strength(0.04));
+}).observe(wrap);
+
+// SSE
+function connect(){
+  const dot=document.getElementById("dot"), txt=document.getElementById("stxt");
+  const es=new EventSource("/events");
+  es.onopen  = ()=>{ dot.className="on"; txt.textContent="Connecté"; };
+  es.onmessage = e=>{ try{ const d=JSON.parse(e.data); if(d.user_id) addEvent(d); }catch(_){} };
+  es.onerror = ()=>{ dot.className=""; txt.textContent="Reconnexion…"; es.close(); setTimeout(connect,3000); };
+}
+connect();
+</script>
+</body>
+</html>
